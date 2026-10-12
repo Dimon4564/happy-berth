@@ -126,7 +126,7 @@
         const messageScreen = document.getElementById('message-screen');
         const hud = document.getElementById('hud');
 
-        let gameState = 'start'; // start, menu, playing, levelComplete, gameover, win
+        let gameState = 'start'; 
         let currentLevel = 1;
         const maxLevels = 4;
         let lives = 3;
@@ -139,13 +139,12 @@
         
         let masterVolume = 0.5;
 
-        let platforms = [], enemies = [], items = [], particles = [], clouds = [], signboards = [], flag = null, boss = null, player = null;
+        let platforms = [], enemies = [], items = [], particles = [], clouds = [], signboards = [], projectiles = [], flag = null, boss = null, player = null;
         let playerStartX = 100, playerStartY = 200;
 
         let audioCtx;
         let bgmOsc = null;
         let bgmGain = null;
-        let isBgmPlaying = false;
         
         const melody = [261.63, 293.66, 329.63, 349.23, 392.00, 329.63, 261.63, 392.00];
         let melodyStep = 0;
@@ -193,6 +192,8 @@
             } else if (type === 'damage') {
                 playTone(100, 'square', 0.3, 0.7);
                 setTimeout(() => playTone(80, 'sawtooth', 0.4, 0.7), 100);
+            } else if (type === 'shoot') {
+                playTone(500, 'square', 0.1, 0.3);
             }
         }
         
@@ -294,7 +295,6 @@
             update(dt) {
                 if (this.invulnTimer > 0) this.invulnTimer -= dt;
                 
-                // Allow control only if not knocked back hard
                 this.isWalking = false; 
                 this.isSprinting = keys['ShiftLeft'] || keys['ShiftRight'];
                 let curSpeed = this.isSprinting ? this.sprintSpeed : this.speed;
@@ -304,7 +304,6 @@
                 } else if (keys['ArrowRight'] || keys['KeyD']) { 
                     this.vx = curSpeed; this.facingRight = true; this.isWalking = true; 
                 } else { 
-                    // Friction
                     this.vx *= 0.8;
                     if(Math.abs(this.vx) < 10) this.vx = 0;
                 }
@@ -356,7 +355,6 @@
             
             draw(ctx) {
                 ctx.save(); 
-                // Flashing if invulnerable
                 if (this.invulnTimer > 0 && Math.floor(Date.now() / 100) % 2 === 0) {
                     ctx.globalAlpha = 0.5;
                 }
@@ -438,20 +436,17 @@
                 ctx.shadowBlur = 15; 
                 ctx.shadowOffsetY = 10;
                 
-                // Dirt
                 ctx.fillStyle = '#5c4033'; 
                 ctx.beginPath(); 
                 ctx.roundRect(this.x, this.y, this.width, this.height, 8); 
                 ctx.fill();
                 
-                // Grass
                 ctx.shadowColor = 'transparent'; 
                 ctx.fillStyle = '#22c55e';
                 ctx.beginPath(); 
                 ctx.roundRect(this.x, this.y, this.width, Math.min(16, this.height), [8,8,0,0]); 
                 ctx.fill();
                 
-                // Grass texture details
                 ctx.fillStyle = '#16a34a';
                 for(let i = this.x + 5; i < this.x + this.width - 10; i += 20) {
                     ctx.beginPath(); 
@@ -465,9 +460,12 @@
         }
 
         class Enemy {
-            constructor(x, y, speed, dist) {
+            constructor(x, y, speed, dist, type = 'normal') {
                 this.x = x; this.y = y; this.startX = x; this.width = 35; this.height = 35;
                 this.speed = speed; this.travelDist = dist; this.vx = speed; this.bounce = 0;
+                this.type = type; // 'normal' (orange) or 'shooter' (red)
+                this.hp = type === 'shooter' ? 2 : 1; 
+                this.shootTimer = 0;
             }
             update(dt) {
                 this.x += this.vx * dt; 
@@ -479,12 +477,23 @@
                     this.x = this.startX; 
                     this.vx *= -1; 
                 }
+
+                if(this.type === 'shooter') {
+                    this.shootTimer += dt;
+                    if(this.shootTimer > 2.5 && Math.abs(player.x - this.x) < 800) {
+                        this.shootTimer = 0;
+                        let dir = player.x > this.x ? 1 : -1;
+                        projectiles.push(new Projectile(this.x + this.width/2, this.y + 10, dir * 300));
+                        playSFX('shoot');
+                    }
+                }
             }
             draw(ctx) {
                 ctx.save(); 
                 ctx.translate(this.x + this.width/2, this.y + this.height/2 - Math.abs(Math.sin(this.bounce))*4);
                 
-                ctx.fillStyle = '#ef4444'; 
+                // Оранжевый для обычных, Красный для стрелков
+                ctx.fillStyle = this.type === 'shooter' ? '#ef4444' : '#f97316'; 
                 ctx.beginPath(); 
                 ctx.roundRect(-this.width/2, -this.height/2, this.width, this.height, 6); 
                 ctx.fill();
@@ -499,6 +508,24 @@
                 ctx.beginPath(); ctx.moveTo(-10, -8); ctx.lineTo(-4, -5); ctx.stroke(); 
                 ctx.beginPath(); ctx.moveTo(10, -8); ctx.lineTo(4, -5); ctx.stroke();
                 
+                ctx.restore();
+            }
+        }
+
+        class Projectile {
+            constructor(x, y, vx) {
+                this.x = x; this.y = y; this.vx = vx;
+                this.width = 12; this.height = 12;
+            }
+            update(dt) { this.x += this.vx * dt; }
+            draw(ctx) {
+                ctx.save();
+                ctx.shadowColor = '#fde047';
+                ctx.shadowBlur = 10;
+                ctx.fillStyle = '#fef08a';
+                ctx.beginPath();
+                ctx.arc(this.x + this.width/2, this.y + this.height/2, 6, 0, Math.PI*2);
+                ctx.fill();
                 ctx.restore();
             }
         }
@@ -683,14 +710,13 @@
             }
         }
 
-        // Create clouds
         for(let i=0; i<15; i++) {
             clouds.push({ x: Math.random()*3000, y: Math.random()*300, scale: Math.random()*0.6+0.4, speed: Math.random()*10+5 });
         }
 
         function loadLevel(lvl) {
             currentLevel = lvl; 
-            platforms = []; enemies = []; items = []; signboards = []; particles = []; 
+            platforms = []; enemies = []; items = []; signboards = []; particles = []; projectiles = []; 
             boss = null; flag = null;
             
             playerStartX = 100; playerStartY = 200;
@@ -698,58 +724,95 @@
             camera.x = 0; camera.y = 0;
 
             if(lvl === 1) {
-                platforms.push(new Platform(0, 500, 600, 150)); 
-                platforms.push(new Platform(700, 400, 200, 50));
-                platforms.push(new Platform(1000, 300, 300, 50)); 
-                platforms.push(new Platform(1400, 500, 800, 150));
-                
+                // Уровень 1: Удлиненный обучающий с прыжком с разбега
+                platforms.push(new Platform(0, 500, 800, 200)); 
                 signboards.push(new Signboard(150, 450, "A/D - Ходить")); 
                 signboards.push(new Signboard(350, 450, "Space - Прыжок"));
                 signboards.push(new Signboard(550, 450, "Shift - Бег")); 
-                signboards.push(new Signboard(1600, 450, "Прыгай на врагов!"));
                 
-                enemies.push(new Enemy(1700, 465, 80, 150));
-                
-                items.push(new Item(450, 450, 'gift')); 
-                items.push(new Item(780, 350, 'gift')); 
-                items.push(new Item(1100, 250, 'heart'));
-                
-                flag = new Flag(2100, 420);
+                platforms.push(new Platform(1000, 450, 300, 250));
+                enemies.push(new Enemy(1100, 415, 80, 150, 'normal'));
+                signboards.push(new Signboard(1150, 400, "Прыгай на голову!"));
+
+                platforms.push(new Platform(1500, 350, 200, 350));
+                items.push(new Item(1580, 300, 'gift'));
+
+                platforms.push(new Platform(1900, 500, 800, 200));
+                enemies.push(new Enemy(2100, 465, 100, 200, 'normal'));
+                items.push(new Item(2200, 450, 'heart'));
+
+                // Проверка прыжка со спринтом
+                platforms.push(new Platform(3000, 500, 300, 200));
+                signboards.push(new Signboard(2700, 450, "Прыгай с разбегом! (Shift)"));
+                items.push(new Item(3130, 450, 'gift'));
+
+                flag = new Flag(3200, 420);
+
             } else if(lvl === 2) {
-                platforms.push(new Platform(0, 500, 400, 150)); 
-                platforms.push(new Platform(500, 400, 100, 30));
-                platforms.push(new Platform(700, 300, 100, 30)); 
-                platforms.push(new Platform(900, 200, 100, 30));
-                platforms.push(new Platform(1200, 450, 800, 150));
-                
-                enemies.push(new Enemy(200, 465, 100, 100)); 
-                enemies.push(new Enemy(1300, 415, 120, 200)); 
-                enemies.push(new Enemy(1600, 415, 150, 200));
-                
-                items.push(new Item(250, 450, 'gift')); 
-                items.push(new Item(730, 250, 'gift')); 
-                items.push(new Item(1400, 400, 'heart'));
-                
-                flag = new Flag(1900, 370);
+                // Уровень 2: Введение стреляющих красных врагов и стен
+                platforms.push(new Platform(0, 500, 600, 200));
+                signboards.push(new Signboard(200, 450, "Красные - стреляют!"));
+                signboards.push(new Signboard(400, 450, "Прыгни на них 2 раза!"));
+                enemies.push(new Enemy(400, 465, 80, 100, 'shooter'));
+
+                platforms.push(new Platform(800, 400, 400, 300));
+                enemies.push(new Enemy(1000, 365, 100, 150, 'shooter'));
+                items.push(new Item(1100, 350, 'gift'));
+
+                // Препятствие - Стена
+                platforms.push(new Platform(1400, 500, 600, 200));
+                platforms.push(new Platform(1700, 350, 50, 350)); // Стена
+                platforms.push(new Platform(1600, 420, 100, 20)); // Ступенька для прыжка
+
+                items.push(new Item(1450, 450, 'heart'));
+                enemies.push(new Enemy(1800, 465, 120, 150, 'normal'));
+
+                platforms.push(new Platform(2300, 450, 500, 250));
+                enemies.push(new Enemy(2500, 415, 100, 200, 'shooter'));
+                items.push(new Item(2600, 400, 'gift'));
+
+                flag = new Flag(2700, 370);
+
             } else if(lvl === 3) {
-                platforms.push(new Platform(0, 550, 300, 150)); 
-                platforms.push(new Platform(400, 450, 80, 30));
-                platforms.push(new Platform(550, 350, 80, 30)); 
-                platforms.push(new Platform(400, 250, 80, 30));
-                platforms.push(new Platform(750, 250, 80, 30)); 
-                platforms.push(new Platform(950, 500, 1000, 150));
-                
-                enemies.push(new Enemy(1050, 465, 150, 250)); 
-                enemies.push(new Enemy(1400, 465, 200, 300));
-                
-                items.push(new Item(150, 500, 'gift')); 
-                items.push(new Item(575, 300, 'gift')); 
-                items.push(new Item(1500, 450, 'heart'));
-                
-                flag = new Flag(1850, 420);
+                // Уровень 3: Хардкорный платформинг
+                platforms.push(new Platform(0, 500, 400, 200));
+                enemies.push(new Enemy(200, 465, 100, 150, 'shooter'));
+
+                // Маленькие столбики над пропастью
+                platforms.push(new Platform(600, 400, 80, 300));
+                platforms.push(new Platform(900, 300, 80, 400));
+                platforms.push(new Platform(1200, 200, 80, 500));
+                items.push(new Item(1225, 150, 'gift'));
+
+                platforms.push(new Platform(1500, 500, 800, 200));
+                enemies.push(new Enemy(1700, 465, 120, 200, 'shooter'));
+                enemies.push(new Enemy(2000, 465, 120, 200, 'shooter'));
+                items.push(new Item(1850, 450, 'heart'));
+
+                // Глубокий обрыв со ступенькой
+                platforms.push(new Platform(2600, 400, 150, 300));
+                platforms.push(new Platform(3000, 500, 400, 200));
+                enemies.push(new Enemy(3100, 465, 100, 150, 'shooter'));
+
+                flag = new Flag(3300, 420);
+
             } else if(lvl === 4) {
-                platforms.push(new Platform(0, 600, 2200, 200));
-                boss = new Boss(1200, 300);
+                // Уровень 4: Арена Босса
+                platforms.push(new Platform(0, 500, 300, 200));
+                
+                platforms.push(new Platform(400, 600, 1400, 200)); // Пол
+                platforms.push(new Platform(400, 150, 1400, 50));  // Потолок
+                platforms.push(new Platform(350, 150, 50, 500));   // Левая стена
+                platforms.push(new Platform(1800, 150, 50, 500));  // Правая стена
+
+                platforms.push(new Platform(600, 450, 150, 30));
+                platforms.push(new Platform(1000, 350, 200, 30));
+                platforms.push(new Platform(1400, 450, 150, 30));
+
+                items.push(new Item(650, 400, 'heart'));
+                items.push(new Item(1450, 400, 'heart'));
+
+                boss = new Boss(1100, 300);
             }
             updateHUD();
         }
@@ -777,9 +840,7 @@
             }
         }
 
-        function pitFall() {
-            takeDamage(true);
-        }
+        function pitFall() { takeDamage(true); }
 
         function updateHUD() {
             document.getElementById('ui-lives').innerText = lives;
@@ -830,7 +891,6 @@
             document.getElementById('message-title').className = "text-6xl font-black mb-4 text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-pink-500 drop-shadow-2xl animate-glow";
             document.getElementById('message-text').innerHTML = "С днем рождения, Надя!<br><span class='text-pink-400 text-3xl mt-4 block'>Я тебя люблю! ❤️</span>";
             
-            // Fireworks
             let c = 0; 
             let fInt = setInterval(() => {
                 spawnExplosion(
@@ -847,7 +907,6 @@
             const dt = Math.min((timestamp - lastTime) / 1000, 0.1); 
             lastTime = timestamp;
 
-            // Audio sequencer tick
             if (gameState === 'playing' || gameState === 'menu') {
                 scheduleBGM();
             }
@@ -855,7 +914,6 @@
             if (gameState === 'playing') {
                 player.update(dt);
                 
-                // Camera Follow
                 let targetCamX = player.x - canvas.width/2 + player.width/2; 
                 let targetCamY = Math.min(100, player.y - canvas.height/2 + 100);
                 camera.x += (targetCamX - camera.x) * 5 * dt; 
@@ -863,19 +921,22 @@
                 
                 if (screenShakeTime > 0) screenShakeTime -= dt;
 
-                // Enemy logic
+                // Враги
                 for (let i = enemies.length - 1; i >= 0; i--) {
                     let e = enemies[i]; 
                     e.update(dt);
                     if (isColliding(player, e)) {
-                        // Jump on top
                         if (player.vy > 0 && player.y + player.height < e.y + e.height/2 + 10) {
                             playSFX('hit'); 
-                            spawnExplosion(e.x + e.width/2, e.y + e.height/2, '#ef4444');
                             player.vy = player.jumpForce * 0.8; 
-                            enemies.splice(i, 1);
+                            e.hp--;
+                            if (e.hp <= 0) {
+                                spawnExplosion(e.x + e.width/2, e.y + e.height/2, e.type === 'shooter' ? '#ef4444' : '#f97316');
+                                enemies.splice(i, 1);
+                            } else {
+                                spawnExplosion(e.x + e.width/2, e.y, '#ffffff'); // Вспышка при попадании
+                            }
                         } else if(player.invulnTimer <= 0) {
-                            // Take damage / knockback
                             player.vx = player.x < e.x ? -300 : 300; 
                             player.vy = -300; 
                             takeDamage(false);
@@ -883,7 +944,30 @@
                     }
                 }
 
-                // Boss Logic
+                // Снаряды
+                for (let i = projectiles.length - 1; i >= 0; i--) {
+                    let p = projectiles[i];
+                    p.update(dt);
+                    
+                    if (isColliding(player, p) && player.invulnTimer <= 0) {
+                        player.vx = p.vx > 0 ? 300 : -300;
+                        player.vy = -300;
+                        takeDamage(false);
+                        projectiles.splice(i, 1);
+                        continue;
+                    }
+                    
+                    let hitWall = false;
+                    for(let plat of platforms) {
+                        if (isColliding(p, plat)) hitWall = true;
+                    }
+                    
+                    if (hitWall || Math.abs(p.x - player.x) > 1500) {
+                        projectiles.splice(i, 1);
+                    }
+                }
+
+                // Босс
                 if (boss) {
                     boss.update(dt);
                     if (isColliding(player, boss)) {
@@ -908,7 +992,7 @@
                     }
                 }
 
-                // Item Logic
+                // Предметы (ИСПРАВЛЕНИЕ СЕРДЕЧЕК ЗДЕСЬ)
                 for (let i of items) {
                     i.update(dt);
                     if (!i.collected && isColliding(player, i)) {
@@ -918,10 +1002,10 @@
                             collectedGifts++; 
                             spawnExplosion(i.x+15, i.y+15, '#fde047'); 
                             updateHUD(); 
-                        } else if(i.type === 'heart' && lives < 3) { 
-                            i.collected = true;
+                        } else if(i.type === 'heart') { 
+                            i.collected = true; // Подбираем в любом случае
                             playSFX('heart'); 
-                            lives++; 
+                            if(lives < 3) lives++; // Но здоровье не превышает 3
                             spawnExplosion(i.x+15, i.y+15, '#ef4444'); 
                             updateHUD(); 
                         }
@@ -941,7 +1025,6 @@
                 if(c.x < -200) c.x = 3000; 
             }
 
-            // Draw Sky
             let bgGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
             if (currentLevel === 4) { 
                 bgGradient.addColorStop(0, '#1e1b4b'); bgGradient.addColorStop(1, '#7f1d1d'); 
@@ -951,7 +1034,6 @@
             ctx.fillStyle = bgGradient; 
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Draw Clouds
             ctx.fillStyle = currentLevel === 4 ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.5)';
             for(let c of clouds) {
                 let cx = (c.x - camera.x * (0.1 + c.scale*0.1)) % 3200; 
@@ -973,6 +1055,7 @@
             for (let p of platforms) p.draw(ctx);
             for (let i of items) i.draw(ctx);
             for (let e of enemies) e.draw(ctx);
+            for (let pr of projectiles) pr.draw(ctx);
             if (boss) boss.draw(ctx);
             for (let p of particles) p.draw(ctx);
             
@@ -984,13 +1067,10 @@
             requestAnimationFrame(gameLoop);
         }
 
-        // Initialize empty black background before first load
         ctx.fillStyle = '#0f172a'; 
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
-        // Start the loop immediately so background draws
         requestAnimationFrame(gameLoop);
-
     </script>
 </body>
 </html>
