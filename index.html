@@ -63,7 +63,6 @@
     <canvas id="gameCanvas"></canvas>
 
     <div id="ui-container" class="ui-layer">
-        
         <div id="start-screen" class="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center pointer-events-auto z-50 cursor-pointer transition-opacity duration-500">
             <h1 class="text-4xl md:text-6xl font-black text-white mb-6 animate-glow text-center">Приключение котика</h1>
             <p class="text-xl text-slate-300 animate-pulse">Кликните, чтобы начать</p>
@@ -128,7 +127,6 @@
 
         let gameState = 'start'; 
         let currentLevel = 1;
-        const maxLevels = 4;
         let lives = 3;
         let collectedGifts = 0;
         let lastTime = 0;
@@ -143,10 +141,11 @@
         let playerStartX = 100, playerStartY = 200;
 
         let audioCtx;
-        let bgmOsc = null;
-        let bgmGain = null;
         
-        const melody = [261.63, 293.66, 329.63, 349.23, 392.00, 329.63, 261.63, 392.00];
+        // Два разных трека: обычный и эпичный для босса
+        const melodyNormal = [261.63, 293.66, 329.63, 349.23, 392.00, 329.63, 261.63, 392.00];
+        const melodyBoss = [130.81, 146.83, 130.81, 155.56, 130.81, 196.00, 185.00, 155.56]; // Мрачный минорный рифф
+        
         let melodyStep = 0;
         let nextNoteTime = 0;
 
@@ -199,25 +198,30 @@
         
         function scheduleBGM() {
             if (!audioCtx || masterVolume === 0) return;
+            
+            const isBossLevel = currentLevel === 4;
+            const melody = isBossLevel ? melodyBoss : melodyNormal;
+            const noteDuration = isBossLevel ? 0.25 : 0.5; // Босс-музыка быстрее
+            
             while (nextNoteTime < audioCtx.currentTime + 0.1) {
                 const freq = melody[melodyStep % melody.length];
                 
                 const osc = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
                 
-                osc.type = 'triangle';
+                osc.type = isBossLevel ? 'sawtooth' : 'triangle'; // Более агрессивный звук для босса
                 osc.frequency.value = freq;
                 
-                gain.gain.setValueAtTime(masterVolume * 0.1, nextNoteTime);
-                gain.gain.exponentialRampToValueAtTime(0.001, nextNoteTime + 0.4);
+                gain.gain.setValueAtTime(masterVolume * (isBossLevel ? 0.15 : 0.1), nextNoteTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, nextNoteTime + (noteDuration * 0.8));
                 
                 osc.connect(gain);
                 gain.connect(audioCtx.destination);
                 
                 osc.start(nextNoteTime);
-                osc.stop(nextNoteTime + 0.5);
+                osc.stop(nextNoteTime + noteDuration);
                 
-                nextNoteTime += 0.5;
+                nextNoteTime += noteDuration;
                 melodyStep++;
             }
         }
@@ -463,7 +467,7 @@
             constructor(x, y, speed, dist, type = 'normal') {
                 this.x = x; this.y = y; this.startX = x; this.width = 35; this.height = 35;
                 this.speed = speed; this.travelDist = dist; this.vx = speed; this.bounce = 0;
-                this.type = type; // 'normal' (orange) or 'shooter' (red)
+                this.type = type; 
                 this.hp = type === 'shooter' ? 2 : 1; 
                 this.shootTimer = 0;
             }
@@ -492,7 +496,6 @@
                 ctx.save(); 
                 ctx.translate(this.x + this.width/2, this.y + this.height/2 - Math.abs(Math.sin(this.bounce))*4);
                 
-                // Оранжевый для обычных, Красный для стрелков
                 ctx.fillStyle = this.type === 'shooter' ? '#ef4444' : '#f97316'; 
                 ctx.beginPath(); 
                 ctx.roundRect(-this.width/2, -this.height/2, this.width, this.height, 6); 
@@ -533,14 +536,16 @@
         class Boss {
             constructor(x, y) {
                 this.x = x; this.y = y; this.width = 70; this.height = 70;
-                this.hp = 3; this.vx = 200; this.vy = 0; this.timer = 0; this.isGrounded = false; this.invulnTimer = 0;
+                this.hp = 5; // Сделаем босса немного крепче для эпичности
+                this.maxHp = 5;
+                this.vx = 250; this.vy = 0; this.timer = 0; this.isGrounded = false; this.invulnTimer = 0;
             }
             update(dt) {
                 this.timer += dt; 
                 if (this.invulnTimer > 0) this.invulnTimer -= dt;
                 
-                if (this.isGrounded && this.timer > 2.5) { 
-                    this.vy = -700; 
+                if (this.isGrounded && this.timer > 2.0) { 
+                    this.vy = -750; 
                     this.isGrounded = false; 
                     this.timer = 0; 
                     addScreenShake(0.2, 5); 
@@ -550,11 +555,12 @@
                 this.y += this.vy * dt; 
                 this.x += this.vx * dt;
                 
+                // Границы перемещения босса по открытой арене
                 if (this.x < 100) { this.x = 100; this.vx *= -1; } 
-                if (this.x > 1900 - this.width) { this.x = 1900 - this.width; this.vx *= -1; }
+                if (this.x > 1500 - this.width) { this.x = 1500 - this.width; this.vx *= -1; }
                 
-                if (this.y > 600 - this.height) { 
-                    this.y = 600 - this.height; 
+                if (this.y > 500 - this.height) { 
+                    this.y = 500 - this.height; 
                     if (!this.isGrounded) addScreenShake(0.2, 5); 
                     this.vy = 0; 
                     this.isGrounded = true; 
@@ -610,7 +616,7 @@
                 ctx.fillStyle = 'rgba(0,0,0,0.5)'; 
                 ctx.fillRect(-30, -50, 60, 6);
                 ctx.fillStyle = '#ef4444'; 
-                ctx.fillRect(-30, -50, (this.hp/3)*60, 6);
+                ctx.fillRect(-30, -50, (this.hp/this.maxHp)*60, 6);
                 
                 ctx.restore();
             }
@@ -645,9 +651,9 @@
             constructor(x, y) { this.x = x; this.y = y; this.width = 40; this.height = 80; }
             draw(ctx) {
                 ctx.save(); ctx.translate(this.x, this.y);
-                ctx.fillStyle = '#d1d5db'; ctx.fillRect(10, 0, 4, 80); // Pole
+                ctx.fillStyle = '#d1d5db'; ctx.fillRect(10, 0, 4, 80); 
                 ctx.fillStyle = '#ef4444'; 
-                ctx.beginPath(); ctx.moveTo(14, 5); ctx.lineTo(35, 15); ctx.lineTo(14, 25); ctx.fill(); // Flag
+                ctx.beginPath(); ctx.moveTo(14, 5); ctx.lineTo(35, 15); ctx.lineTo(14, 25); ctx.fill();
                 ctx.restore();
             }
         }
@@ -724,7 +730,6 @@
             camera.x = 0; camera.y = 0;
 
             if(lvl === 1) {
-                // Уровень 1: Удлиненный обучающий с прыжком с разбега
                 platforms.push(new Platform(0, 500, 800, 200)); 
                 signboards.push(new Signboard(150, 450, "A/D - Ходить")); 
                 signboards.push(new Signboard(350, 450, "Space - Прыжок"));
@@ -741,7 +746,6 @@
                 enemies.push(new Enemy(2100, 465, 100, 200, 'normal'));
                 items.push(new Item(2200, 450, 'heart'));
 
-                // Проверка прыжка со спринтом
                 platforms.push(new Platform(3000, 500, 300, 200));
                 signboards.push(new Signboard(2700, 450, "Прыгай с разбегом! (Shift)"));
                 items.push(new Item(3130, 450, 'gift'));
@@ -749,7 +753,6 @@
                 flag = new Flag(3200, 420);
 
             } else if(lvl === 2) {
-                // Уровень 2: Введение стреляющих красных врагов и стен
                 platforms.push(new Platform(0, 500, 600, 200));
                 signboards.push(new Signboard(200, 450, "Красные - стреляют!"));
                 signboards.push(new Signboard(400, 450, "Прыгни на них 2 раза!"));
@@ -759,7 +762,6 @@
                 enemies.push(new Enemy(1000, 365, 100, 150, 'shooter'));
                 items.push(new Item(1100, 350, 'gift'));
 
-                // Препятствие - Стена
                 platforms.push(new Platform(1400, 500, 600, 200));
                 platforms.push(new Platform(1700, 350, 50, 350)); // Стена
                 platforms.push(new Platform(1600, 420, 100, 20)); // Ступенька для прыжка
@@ -774,11 +776,9 @@
                 flag = new Flag(2700, 370);
 
             } else if(lvl === 3) {
-                // Уровень 3: Хардкорный платформинг
                 platforms.push(new Platform(0, 500, 400, 200));
                 enemies.push(new Enemy(200, 465, 100, 150, 'shooter'));
 
-                // Маленькие столбики над пропастью
                 platforms.push(new Platform(600, 400, 80, 300));
                 platforms.push(new Platform(900, 300, 80, 400));
                 platforms.push(new Platform(1200, 200, 80, 500));
@@ -789,7 +789,6 @@
                 enemies.push(new Enemy(2000, 465, 120, 200, 'shooter'));
                 items.push(new Item(1850, 450, 'heart'));
 
-                // Глубокий обрыв со ступенькой
                 platforms.push(new Platform(2600, 400, 150, 300));
                 platforms.push(new Platform(3000, 500, 400, 200));
                 enemies.push(new Enemy(3100, 465, 100, 150, 'shooter'));
@@ -797,22 +796,20 @@
                 flag = new Flag(3300, 420);
 
             } else if(lvl === 4) {
-                // Уровень 4: Арена Босса
-                platforms.push(new Platform(0, 500, 300, 200));
-                
-                platforms.push(new Platform(400, 600, 1400, 200)); // Пол
-                platforms.push(new Platform(400, 150, 1400, 50));  // Потолок
-                platforms.push(new Platform(350, 150, 50, 500));   // Левая стена
-                platforms.push(new Platform(1800, 150, 50, 500));  // Правая стена
+                // Арена босса без блокирующей стены
+                platforms.push(new Platform(0, 500, 1600, 200)); // Длинный пол для арены
+                platforms.push(new Platform(-50, 0, 50, 700));  // Невидимая граница слева
+                platforms.push(new Platform(1600, 0, 50, 700)); // Невидимая граница справа
 
-                platforms.push(new Platform(600, 450, 150, 30));
-                platforms.push(new Platform(1000, 350, 200, 30));
-                platforms.push(new Platform(1400, 450, 150, 30));
+                // Платформы для маневрирования
+                platforms.push(new Platform(300, 350, 200, 30));
+                platforms.push(new Platform(700, 250, 200, 30));
+                platforms.push(new Platform(1100, 350, 200, 30));
 
-                items.push(new Item(650, 400, 'heart'));
-                items.push(new Item(1450, 400, 'heart'));
+                items.push(new Item(400, 300, 'heart'));
+                items.push(new Item(1200, 300, 'heart'));
 
-                boss = new Boss(1100, 300);
+                boss = new Boss(1000, 300);
             }
             updateHUD();
         }
@@ -921,7 +918,6 @@
                 
                 if (screenShakeTime > 0) screenShakeTime -= dt;
 
-                // Враги
                 for (let i = enemies.length - 1; i >= 0; i--) {
                     let e = enemies[i]; 
                     e.update(dt);
@@ -934,7 +930,7 @@
                                 spawnExplosion(e.x + e.width/2, e.y + e.height/2, e.type === 'shooter' ? '#ef4444' : '#f97316');
                                 enemies.splice(i, 1);
                             } else {
-                                spawnExplosion(e.x + e.width/2, e.y, '#ffffff'); // Вспышка при попадании
+                                spawnExplosion(e.x + e.width/2, e.y, '#ffffff');
                             }
                         } else if(player.invulnTimer <= 0) {
                             player.vx = player.x < e.x ? -300 : 300; 
@@ -944,7 +940,6 @@
                     }
                 }
 
-                // Снаряды
                 for (let i = projectiles.length - 1; i >= 0; i--) {
                     let p = projectiles[i];
                     p.update(dt);
@@ -967,7 +962,6 @@
                     }
                 }
 
-                // Босс
                 if (boss) {
                     boss.update(dt);
                     if (isColliding(player, boss)) {
@@ -992,7 +986,6 @@
                     }
                 }
 
-                // Предметы (ИСПРАВЛЕНИЕ СЕРДЕЧЕК ЗДЕСЬ)
                 for (let i of items) {
                     i.update(dt);
                     if (!i.collected && isColliding(player, i)) {
@@ -1003,9 +996,9 @@
                             spawnExplosion(i.x+15, i.y+15, '#fde047'); 
                             updateHUD(); 
                         } else if(i.type === 'heart') { 
-                            i.collected = true; // Подбираем в любом случае
+                            i.collected = true; 
                             playSFX('heart'); 
-                            if(lives < 3) lives++; // Но здоровье не превышает 3
+                            if(lives < 3) lives++; 
                             spawnExplosion(i.x+15, i.y+15, '#ef4444'); 
                             updateHUD(); 
                         }
