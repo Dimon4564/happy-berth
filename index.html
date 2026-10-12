@@ -142,9 +142,8 @@
 
         let audioCtx;
         
-        // Два разных трека: обычный и эпичный для босса
         const melodyNormal = [261.63, 293.66, 329.63, 349.23, 392.00, 329.63, 261.63, 392.00];
-        const melodyBoss = [130.81, 146.83, 130.81, 155.56, 130.81, 196.00, 185.00, 155.56]; // Мрачный минорный рифф
+        const melodyBoss = [130.81, 146.83, 130.81, 155.56, 130.81, 196.00, 185.00, 155.56]; 
         
         let melodyStep = 0;
         let nextNoteTime = 0;
@@ -199,9 +198,9 @@
         function scheduleBGM() {
             if (!audioCtx || masterVolume === 0) return;
             
-            const isBossLevel = currentLevel === 4;
+            const isBossLevel = currentLevel === 5 || currentLevel === 10;
             const melody = isBossLevel ? melodyBoss : melodyNormal;
-            const noteDuration = isBossLevel ? 0.25 : 0.5; // Босс-музыка быстрее
+            const noteDuration = isBossLevel ? 0.25 : 0.5; 
             
             while (nextNoteTime < audioCtx.currentTime + 0.1) {
                 const freq = melody[melodyStep % melody.length];
@@ -209,7 +208,7 @@
                 const osc = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
                 
-                osc.type = isBossLevel ? 'sawtooth' : 'triangle'; // Более агрессивный звук для босса
+                osc.type = isBossLevel ? 'sawtooth' : 'triangle'; 
                 osc.frequency.value = freq;
                 
                 gain.gain.setValueAtTime(masterVolume * (isBossLevel ? 0.15 : 0.1), nextNoteTime);
@@ -534,11 +533,12 @@
         }
 
         class Boss {
-            constructor(x, y) {
+            constructor(x, y, hp) {
                 this.x = x; this.y = y; this.width = 70; this.height = 70;
-                this.hp = 5; // Сделаем босса немного крепче для эпичности
-                this.maxHp = 5;
-                this.vx = 250; this.vy = 0; this.timer = 0; this.isGrounded = false; this.invulnTimer = 0;
+                this.hp = hp; 
+                this.maxHp = hp;
+                this.vx = hp === 10 ? 300 : 250; // Финальный босс чуть быстрее
+                this.vy = 0; this.timer = 0; this.isGrounded = false; this.invulnTimer = 0;
             }
             update(dt) {
                 this.timer += dt; 
@@ -555,7 +555,6 @@
                 this.y += this.vy * dt; 
                 this.x += this.vx * dt;
                 
-                // Границы перемещения босса по открытой арене
                 if (this.x < 100) { this.x = 100; this.vx *= -1; } 
                 if (this.x > 1500 - this.width) { this.x = 1500 - this.width; this.vx *= -1; }
                 
@@ -572,13 +571,13 @@
                 
                 if(this.invulnTimer > 0 && Math.floor(Date.now()/50)%2 === 0) ctx.globalAlpha = 0.5;
                 
-                ctx.shadowColor = 'rgba(220, 38, 38, 0.8)'; 
+                ctx.shadowColor = this.maxHp === 10 ? 'rgba(124, 58, 237, 0.8)' : 'rgba(220, 38, 38, 0.8)'; 
                 ctx.shadowBlur = 20;
                 
                 let scale = 1 + Math.sin(Date.now()/150)*0.03; 
                 ctx.scale(scale, scale);
                 
-                ctx.fillStyle = '#7f1d1d'; 
+                ctx.fillStyle = this.maxHp === 10 ? '#4c1d95' : '#7f1d1d'; 
                 ctx.beginPath(); 
                 ctx.roundRect(-this.width/2, -this.height/2, this.width, this.height, 12); 
                 ctx.fill();
@@ -615,7 +614,7 @@
                 // HP Bar
                 ctx.fillStyle = 'rgba(0,0,0,0.5)'; 
                 ctx.fillRect(-30, -50, 60, 6);
-                ctx.fillStyle = '#ef4444'; 
+                ctx.fillStyle = this.maxHp === 10 ? '#a855f7' : '#ef4444'; 
                 ctx.fillRect(-30, -50, (this.hp/this.maxHp)*60, 6);
                 
                 ctx.restore();
@@ -720,6 +719,21 @@
             clouds.push({ x: Math.random()*3000, y: Math.random()*300, scale: Math.random()*0.6+0.4, speed: Math.random()*10+5 });
         }
 
+        function buildBossArena(hp) {
+            platforms.push(new Platform(0, 500, 1600, 200)); 
+            platforms.push(new Platform(-50, 0, 50, 700));  
+            platforms.push(new Platform(1600, 0, 50, 700)); 
+
+            platforms.push(new Platform(300, 350, 200, 30));
+            platforms.push(new Platform(700, 250, 200, 30));
+            platforms.push(new Platform(1100, 350, 200, 30));
+
+            items.push(new Item(400, 300, 'heart'));
+            items.push(new Item(1200, 300, 'heart'));
+
+            boss = new Boss(1000, 300, hp);
+        }
+
         function loadLevel(lvl) {
             currentLevel = lvl; 
             platforms = []; enemies = []; items = []; signboards = []; particles = []; projectiles = []; 
@@ -749,68 +763,87 @@
                 platforms.push(new Platform(3000, 500, 300, 200));
                 signboards.push(new Signboard(2700, 450, "Прыгай с разбегом! (Shift)"));
                 items.push(new Item(3130, 450, 'gift'));
-
                 flag = new Flag(3200, 420);
 
             } else if(lvl === 2) {
                 platforms.push(new Platform(0, 500, 600, 200));
                 signboards.push(new Signboard(200, 450, "Красные - стреляют!"));
-                signboards.push(new Signboard(400, 450, "Прыгни на них 2 раза!"));
                 enemies.push(new Enemy(400, 465, 80, 100, 'shooter'));
-
                 platforms.push(new Platform(800, 400, 400, 300));
                 enemies.push(new Enemy(1000, 365, 100, 150, 'shooter'));
                 items.push(new Item(1100, 350, 'gift'));
-
                 platforms.push(new Platform(1400, 500, 600, 200));
-                platforms.push(new Platform(1700, 350, 50, 350)); // Стена
-                platforms.push(new Platform(1600, 420, 100, 20)); // Ступенька для прыжка
-
+                platforms.push(new Platform(1700, 350, 50, 350));
+                platforms.push(new Platform(1600, 420, 100, 20));
                 items.push(new Item(1450, 450, 'heart'));
                 enemies.push(new Enemy(1800, 465, 120, 150, 'normal'));
-
                 platforms.push(new Platform(2300, 450, 500, 250));
                 enemies.push(new Enemy(2500, 415, 100, 200, 'shooter'));
-                items.push(new Item(2600, 400, 'gift'));
-
                 flag = new Flag(2700, 370);
 
             } else if(lvl === 3) {
                 platforms.push(new Platform(0, 500, 400, 200));
                 enemies.push(new Enemy(200, 465, 100, 150, 'shooter'));
-
                 platforms.push(new Platform(600, 400, 80, 300));
                 platforms.push(new Platform(900, 300, 80, 400));
                 platforms.push(new Platform(1200, 200, 80, 500));
                 items.push(new Item(1225, 150, 'gift'));
-
                 platforms.push(new Platform(1500, 500, 800, 200));
                 enemies.push(new Enemy(1700, 465, 120, 200, 'shooter'));
                 enemies.push(new Enemy(2000, 465, 120, 200, 'shooter'));
                 items.push(new Item(1850, 450, 'heart'));
-
                 platforms.push(new Platform(2600, 400, 150, 300));
                 platforms.push(new Platform(3000, 500, 400, 200));
                 enemies.push(new Enemy(3100, 465, 100, 150, 'shooter'));
-
                 flag = new Flag(3300, 420);
 
             } else if(lvl === 4) {
-                // Арена босса без блокирующей стены
-                platforms.push(new Platform(0, 500, 1600, 200)); // Длинный пол для арены
-                platforms.push(new Platform(-50, 0, 50, 700));  // Невидимая граница слева
-                platforms.push(new Platform(1600, 0, 50, 700)); // Невидимая граница справа
+                platforms.push(new Platform(0, 500, 1200, 200));
+                enemies.push(new Enemy(400, 465, 150, 300, 'normal'));
+                enemies.push(new Enemy(700, 465, 150, 300, 'shooter'));
+                platforms.push(new Platform(1400, 350, 200, 350));
+                items.push(new Item(1450, 300, 'heart'));
+                platforms.push(new Platform(1800, 450, 600, 250));
+                enemies.push(new Enemy(2000, 415, 120, 200, 'shooter'));
+                items.push(new Item(2200, 400, 'gift'));
+                flag = new Flag(2300, 370);
 
-                // Платформы для маневрирования
-                platforms.push(new Platform(300, 350, 200, 30));
-                platforms.push(new Platform(700, 250, 200, 30));
-                platforms.push(new Platform(1100, 350, 200, 30));
+            } else if(lvl === 5) {
+                buildBossArena(4); // Босс на 4 хп
+                
+            } else if(lvl >= 6 && lvl <= 9) {
+                // Генерация обычных уровней с нарастающей сложностью
+                let length = 2000 + (lvl * 300);
+                let currentX = 0;
+                
+                platforms.push(new Platform(0, 500, 400, 200));
+                currentX = 400;
 
-                items.push(new Item(400, 300, 'heart'));
-                items.push(new Item(1200, 300, 'heart'));
+                while(currentX < length) {
+                    let gap = 150 + Math.random() * 200;
+                    let pWidth = 200 + Math.random() * 400;
+                    let pY = 300 + Math.random() * 250;
+                    
+                    currentX += gap;
+                    platforms.push(new Platform(currentX, pY, pWidth, 700));
+                    
+                    if(Math.random() > 0.3) {
+                        let eType = Math.random() > 0.5 ? 'normal' : 'shooter';
+                        enemies.push(new Enemy(currentX + 50, pY - 35, 100 + (lvl*10), pWidth - 100, eType));
+                    }
+                    if(Math.random() > 0.7) {
+                        items.push(new Item(currentX + pWidth/2, pY - 80, Math.random() > 0.5 ? 'gift' : 'heart'));
+                    }
+                    currentX += pWidth;
+                }
+                
+                platforms.push(new Platform(currentX + 200, 400, 300, 300));
+                flag = new Flag(currentX + 350, 320);
 
-                boss = new Boss(1000, 300);
+            } else if(lvl === 10) {
+                buildBossArena(10); // Финальный босс на 10 хп
             }
+
             updateHUD();
         }
 
@@ -922,7 +955,8 @@
                     let e = enemies[i]; 
                     e.update(dt);
                     if (isColliding(player, e)) {
-                        if (player.vy > 0 && player.y + player.height < e.y + e.height/2 + 10) {
+                        // Исправленная логика прыжка: проверяем, что центр котика выше центра врага
+                        if (player.vy > 0 && player.y + player.height/2 < e.y + e.height/2) {
                             playSFX('hit'); 
                             player.vy = player.jumpForce * 0.8; 
                             e.hp--;
@@ -965,7 +999,8 @@
                 if (boss) {
                     boss.update(dt);
                     if (isColliding(player, boss)) {
-                        if (player.vy > 0 && player.y + player.height < boss.y + 30 && boss.invulnTimer <= 0) {
+                        // Та же логика проверки центра для босса
+                        if (player.vy > 0 && player.y + player.height/2 < boss.y + boss.height/2 && boss.invulnTimer <= 0) {
                             playSFX('hit'); 
                             boss.hp--; 
                             boss.invulnTimer = 1; 
@@ -976,7 +1011,11 @@
                             if (boss.hp <= 0) { 
                                 spawnExplosion(boss.x + boss.width/2, boss.y + boss.height/2, '#ef4444'); 
                                 boss = null; 
-                                setTimeout(winGame, 1000); 
+                                if (currentLevel === 10) {
+                                    setTimeout(winGame, 1000); 
+                                } else {
+                                    setTimeout(showLevelComplete, 1000); // Для 5-го уровня просто переходим дальше
+                                }
                             }
                         } else if(boss.invulnTimer <= 0 && player.invulnTimer <= 0) {
                             player.vx = player.x < boss.x ? -400 : 400; 
@@ -1019,7 +1058,7 @@
             }
 
             let bgGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            if (currentLevel === 4) { 
+            if (currentLevel === 5 || currentLevel === 10) { 
                 bgGradient.addColorStop(0, '#1e1b4b'); bgGradient.addColorStop(1, '#7f1d1d'); 
             } else { 
                 bgGradient.addColorStop(0, '#0284c7'); bgGradient.addColorStop(1, '#bae6fd'); 
@@ -1027,7 +1066,7 @@
             ctx.fillStyle = bgGradient; 
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            ctx.fillStyle = currentLevel === 4 ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.5)';
+            ctx.fillStyle = (currentLevel === 5 || currentLevel === 10) ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.5)';
             for(let c of clouds) {
                 let cx = (c.x - camera.x * (0.1 + c.scale*0.1)) % 3200; 
                 if(cx < -200) cx += 3200;
