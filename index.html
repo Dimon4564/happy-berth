@@ -665,14 +665,12 @@
                             level.items.splice(i, 1);
                             updateHUD();
                         } else if(it.type === 'heart') {
-                            // ИСПРАВЛЕНИЕ ТУТ: Сердечко всегда подбирается, лечит если HP < maxHp
                             if(player.hp < player.maxHp) {
-                                player.hp++; 
+                                player.hp++; audio.heart();
+                                spawnDeathParticles(it.x+15, it.y+15, '#e91e63');
+                                level.items.splice(i, 1);
+                                updateHUD();
                             }
-                            audio.heart();
-                            spawnDeathParticles(it.x+15, it.y+15, '#e91e63');
-                            level.items.splice(i, 1);
-                            updateHUD();
                         } else if(it.type === 'flag') {
                             audio.win();
                             if(gameState.level < 4) setMenuState('complete');
