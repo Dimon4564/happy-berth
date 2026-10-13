@@ -189,7 +189,7 @@
 
         class Player {
             constructor(x, y) {
-                this.x = x; this.y = y; this.width = 45; this.height = 35;
+                this.x = x; this.y = y; this.prevX = x; this.prevY = y; this.width = 45; this.height = 35;
                 this.vx = 0; this.vy = 0; this.speed = 350; this.sprintSpeed = 550;
                 this.jumpForce = -700; this.gravity = 1800; this.isGrounded = false;
                 this.facingRight = true; this.walkTimer = 0; this.isWalking = false; this.isSprinting = false;
@@ -208,6 +208,7 @@
                     this.vy = this.jumpForce; this.isGrounded = false; playSFX('jump'); spawnDust(this.x + this.width/2, this.y + this.height);
                 }
                 this.vy += this.gravity * dt;
+                this.prevX = this.x; this.prevY = this.y;
                 
                 if (this.isWalking && this.isSprinting && this.isGrounded && Math.random() > 0.6) {
                     particles.push(new Particle(this.x + this.width/2 + (Math.random()*20-10), this.y + this.height, -this.vx*0.2, -Math.random()*50, 'rgba(255,255,255,0.8)', Math.random()*4+2, 0.4));
@@ -409,8 +410,8 @@
                 platforms.push(new Platform(1500, 500, 800, 200)); enemies.push(new Enemy(1700, 465, 120, 200, 'shooter')); enemies.push(new Enemy(2000, 465, 120, 200, 'shooter')); items.push(new Item(1850, 450, 'heart'));
                 platforms.push(new Platform(2600, 400, 150, 300)); platforms.push(new Platform(3000, 500, 400, 200)); enemies.push(new Enemy(3100, 465, 100, 150, 'shooter')); flag = new Flag(3300, 420);
             } else if(lvl === 4) {
-                platforms.push(new Platform(0, 500, 1200, 200)); enemies.push(new Enemy(400, 465, 150, 300, 'normal')); enemies.push(new Enemy(700, 465, 150, 300, 'shooter'));
-                platforms.push(new Platform(1400, 350, 200, 350)); items.push(new Item(1450, 300, 'heart'));
+                platforms.push(new Platform(0, 500, 1300, 200)); enemies.push(new Enemy(400, 465, 150, 300, 'normal')); enemies.push(new Enemy(700, 465, 150, 300, 'shooter'));
+                platforms.push(new Platform(1400, 400, 200, 300)); items.push(new Item(1450, 350, 'heart'));
                 platforms.push(new Platform(1800, 450, 600, 250)); enemies.push(new Enemy(2000, 415, 120, 200, 'shooter')); items.push(new Item(2200, 400, 'gift')); flag = new Flag(2300, 370);
             } else if(lvl === 5) {
                 buildBossArena(4); 
@@ -425,12 +426,12 @@
                 platforms.push(new Platform(2200, 500, 300, 200)); flag = new Flag(2400, 420);
             } else if(lvl === 8) {
                 platforms.push(new Platform(0, 500, 1000, 200)); enemies.push(new Enemy(300, 465, 100, 200, 'normal')); enemies.push(new Enemy(600, 465, 100, 200, 'shooter')); enemies.push(new Enemy(800, 465, 100, 150, 'normal'));
-                platforms.push(new Platform(1200, 350, 300, 350)); items.push(new Item(1300, 300, 'heart'));
-                platforms.push(new Platform(1700, 250, 400, 450)); enemies.push(new Enemy(1800, 215, 150, 200, 'shooter')); items.push(new Item(1900, 180, 'gift')); flag = new Flag(2000, 170);
+                platforms.push(new Platform(1200, 400, 300, 300)); items.push(new Item(1300, 350, 'heart'));
+                platforms.push(new Platform(1700, 300, 400, 400)); enemies.push(new Enemy(1800, 265, 150, 200, 'shooter')); items.push(new Item(1900, 230, 'gift')); flag = new Flag(2000, 220);
             } else if(lvl === 9) {
                 platforms.push(new Platform(0, 500, 500, 200)); signboards.push(new Signboard(300, 450, "Скоро финал!"));
-                platforms.push(new Platform(700, 350, 150, 350)); enemies.push(new Enemy(720, 315, 80, 100, 'shooter'));
-                platforms.push(new Platform(1000, 200, 150, 500)); items.push(new Item(1050, 150, 'heart'));
+                platforms.push(new Platform(700, 400, 150, 300)); enemies.push(new Enemy(720, 365, 80, 100, 'shooter'));
+                platforms.push(new Platform(1000, 300, 150, 400)); items.push(new Item(1050, 250, 'heart'));
                 platforms.push(new Platform(1300, 450, 800, 250)); enemies.push(new Enemy(1500, 415, 250, 400, 'normal')); enemies.push(new Enemy(1800, 415, 200, 200, 'shooter'));
                 platforms.push(new Platform(2300, 500, 300, 200)); flag = new Flag(2500, 420);
             } else if(lvl === 10) {
@@ -444,7 +445,7 @@
             playSFX('damage'); addScreenShake(0.3, 12); spawnExplosion(player.x+20, player.y+15, '#ef4444');
             lives--; updateHUD();
             if(lives <= 0) { gameOver(); } 
-            else { if(isPit) { player.x = playerStartX; player.y = playerStartY; player.vx = 0; player.vy = 0; } else { player.invulnTimer = 1.5; } }
+            else { if(isPit) { player.x = playerStartX; player.y = playerStartY; player.prevX = playerStartX; player.prevY = playerStartY; player.vx = 0; player.vy = 0; } else { player.invulnTimer = 1.5; } }
         }
 
         function pitFall() { takeDamage(true); }
@@ -470,7 +471,7 @@
         function winGame() {
             gameState = 'win'; hud.classList.add('hidden'); uiContainer.classList.remove('hidden'); messageScreen.classList.remove('hidden');
             document.getElementById('message-title').innerText = "Победа!"; document.getElementById('message-title').className = "text-6xl font-black mb-4 text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-pink-500 drop-shadow-2xl animate-glow";
-            document.getElementById('message-text').innerHTML = "С днем рождения, Надя!<br><span class='text-pink-400 text-3xl mt-4 block'>Я тебя люблю! ❤️</span>";
+            document.getElementById('message-text').innerHTML = "С днём рождения, Надя!<br><span class='text-pink-300 text-2xl mt-4 block'>Пусть каждый день приносит тебе радость, тепло и улыбки. Желаю исполнения самых заветных мечт, верных людей рядом и побольше волшебных моментов! ✨💖</span>";
             let c = 0; let fInt = setInterval(() => { spawnExplosion(camera.x + canvas.width/2 + (Math.random()-0.5)*600, camera.y + canvas.height/2 + (Math.random()-0.5)*400 - 100, ['#fde047','#f43f5e','#3b82f6','#a855f7','#22c55e'][Math.floor(Math.random()*5)]); playSFX('jump'); if(++c > 20) clearInterval(fInt); }, 300);
         }
 
@@ -485,10 +486,18 @@
 
                 for (let i = enemies.length - 1; i >= 0; i--) {
                     let e = enemies[i]; e.update(dt);
-                    if (isColliding(player, e)) {
-                        if (player.vy > 0 && player.y + player.height/2 < e.y + e.height/2) {
-                            playSFX('hit'); player.vy = player.jumpForce * 0.8; e.hp--;
-                            if (e.hp <= 0) { spawnExplosion(e.x + e.width/2, e.y + e.height/2, e.type === 'shooter' ? '#ef4444' : '#f97316'); enemies.splice(i, 1); } 
+                    const crossedEnemyTop = player.vy > 0 &&
+                        player.prevY + player.height <= e.y + 10 &&
+                        player.y + player.height >= e.y &&
+                        player.x + player.width > e.x + 4 &&
+                        player.x < e.x + e.width - 4;
+                    if (isColliding(player, e) || crossedEnemyTop) {
+                        if (crossedEnemyTop) {
+                            playSFX('hit');
+                            player.y = Math.min(player.y, e.y - player.height);
+                            player.vy = player.jumpForce * 0.8;
+                            e.hp--;
+                            if (e.hp <= 0) { spawnExplosion(e.x + e.width/2, e.y + e.height/2, e.type === 'shooter' ? '#ef4444' : '#f97316'); enemies.splice(i, 1); }
                             else { spawnExplosion(e.x + e.width/2, e.y, '#ffffff'); }
                         } else if(player.invulnTimer <= 0) {
                             player.vx = player.x < e.x ? -300 : 300; player.vy = -300; takeDamage(false);
@@ -505,16 +514,25 @@
 
                 if (boss) {
                     boss.update(dt);
-                    if (isColliding(player, boss)) {
-                        if (player.vy > 0 && player.y + player.height/2 < boss.y + boss.height/2 && boss.invulnTimer <= 0) {
-                            playSFX('hit'); boss.hp--; boss.invulnTimer = 1; player.vy = player.jumpForce * 1.2;
-                            spawnExplosion(boss.x + boss.width/2, boss.y, '#fbbf24'); addScreenShake(0.3, 15);
-                            if (boss.hp <= 0) { 
-                                spawnExplosion(boss.x + boss.width/2, boss.y + boss.height/2, '#ef4444'); 
-                                let wasLevel10 = (currentLevel === 10);
-                                boss = null; 
-                                if (wasLevel10) { setTimeout(winGame, 1000); } 
-                                else { setTimeout(showLevelComplete, 1000); }
+                    const crossedBossTop = player.vy > 0 &&
+                        player.prevY + player.height <= boss.y + 14 &&
+                        player.y + player.height >= boss.y &&
+                        player.x + player.width > boss.x + 8 &&
+                        player.x < boss.x + boss.width - 8;
+                    if (isColliding(player, boss) || crossedBossTop) {
+                        if (crossedBossTop) {
+                            player.y = Math.min(player.y, boss.y - player.height);
+                            player.vy = player.jumpForce * 1.2;
+                            if (boss.invulnTimer <= 0) {
+                                playSFX('hit'); boss.hp--; boss.invulnTimer = 0.65;
+                                spawnExplosion(boss.x + boss.width/2, boss.y, '#fbbf24'); addScreenShake(0.3, 15);
+                                if (boss.hp <= 0) {
+                                    spawnExplosion(boss.x + boss.width/2, boss.y + boss.height/2, '#ef4444');
+                                    let wasLevel10 = (currentLevel === 10);
+                                    boss = null;
+                                    if (wasLevel10) { setTimeout(winGame, 1000); }
+                                    else { setTimeout(showLevelComplete, 1000); }
+                                }
                             }
                         } else if(boss.invulnTimer <= 0 && player.invulnTimer <= 0) {
                             player.vx = player.x < boss.x ? -400 : 400; player.vy = -400; takeDamage(false);
